@@ -2,4 +2,7 @@
 __pycache__/
 testbed.py
 .ipynb_checkpoints/
+create_test_rdb.sql
+test_rdb_model.mwb
+test_rdb_model.mwb.bak
 

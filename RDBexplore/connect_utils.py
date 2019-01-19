@@ -9,9 +9,10 @@ import networkx as nx
 
 
 class _Import_Master(object):
-	def __init__(self, database_connection, include_system_tables):
+	def __init__(self, database_connection, include_system_tables, specific_schema=None):
 		self.database_connection = database_connection
 		self._include_system_tables=include_system_tables
+		self._specificSchema = specific_schema
 		return
 
 	@property
@@ -44,8 +45,13 @@ class Import_MySQL(_Import_Master):
 		edges = []
 		tableGraph = nx.DiGraph()
 
-		# if-else for including additional constraints on each SQL query if we do not want information about the MySQL system tables returned
-		if self._include_system_tables == True:
+		# if-else for including additional constraints on each SQL query if we do not want information about the MySQL system tables returned or just want 1 schema
+		if self._specificSchema is not None:
+			system_tables_flag_schema = f"WHERE schema_name = '{self._specificSchema}'"
+			system_tables_flag_tables = f"WHERE table_schema = '{self._specificSchema}'"
+			system_tables_flag_columns = f"WHERE table_schema = '{self._specificSchema}'"
+			system_tables_flag_constraints = f"constraint_schema = '{self._specificSchema}' AND"
+		elif self._include_system_tables == True:
 			system_tables_flag_schema = '';
 			system_tables_flag_tables = '';
 			system_tables_flag_columns = '';
