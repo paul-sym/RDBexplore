@@ -1,4 +1,5 @@
 from rdbexplore import connect_utils
+import networkx as nx
 
 class RDB_Graph(object):
 
@@ -35,6 +36,9 @@ class RDB_Graph(object):
 		self._successfulDataImport = False
 		self._nodes = []
 		self._edges = []
+		self._importer = None
+		self._exporter = None
+		self._tableOnlyGraph = None
 		return
 
 	def dropData(self):
@@ -42,6 +46,7 @@ class RDB_Graph(object):
 		self._nodes = []
 		self._edges = []
 		self._importer = None
+		self._tableOnlyGraph = None
 		return
 
 
@@ -59,7 +64,7 @@ class RDB_Graph(object):
 		self._importer = connect_utils.Import_MySQL(databaseConnection, include_system_tables=self._system_tables_included)
 
 		try:
-			self._nodes, self._edges = self._importer.getData()
+			self._nodes, self._edges, self._tableOnlyGraph = self._importer.getData()
 			self._successfulDataImport = True
 			print(f'Relational database metadata extracted using connection {str(databaseConnection)}')
 
@@ -72,6 +77,17 @@ class RDB_Graph(object):
 
 
 
+	def exportTableOnlyGraph(self, neo4j_graphDatabase_driver):
+		if self._successfulDataImport:
+			# more logic needed here to hanlde other types of graph DB connection request
+			self._exporter = connect_utils.Export_Neo(neo4j_graphDatabase_driver)
+			self._exporter.dropAll()
+			self._exporter.createTableNodes(self._tableOnlyGraph.nodes.data())
+			self._exporter.createTableEdges(self._tableOnlyGraph.edges.data())
+			print('Exported to graph platform successfully.')
+		else:
+			raise Exception('No data imported.  Use "getData" function to import data.')
+		return
 
 
 
@@ -84,10 +100,11 @@ class RDB_Graph(object):
 			self._exporter.createNodes(self._nodes)
 			self._exporter.createEdges(self._edges)
 			print('Exported to graph platform successfully.')
-
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 		return
+
+
 
 
 

@@ -1,4 +1,5 @@
 import re
+import networkx as nx
 
 # ------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------
@@ -38,9 +39,10 @@ class Import_MySQL(_Import_Master):
 	
 
 	def getData(self):
-		
+			
 		nodes = []
 		edges = []
+		tableGraph = nx.DiGraph()
 
 		# if-else for including additional constraints on each SQL query if we do not want information about the MySQL system tables returned
 		if self._include_system_tables == True:
@@ -73,6 +75,7 @@ class Import_MySQL(_Import_Master):
 			for table in table_resultset:
 				nodes.append({'id': str(table[1]) + '.' + str(table[0]), 'name': str(table[0]), 'class': 'Table', 'attributes': {'parent_schema': str(table[1]), 'rows': str(table[2]), 'format': str(table[3]), 'created': str(table[4]), 'last_updated': str(table[5]), 'engine': str(table[6])}})
 				edges.append({'node1_id': str(table[1]) + '.' + str(table[0]), 'node2_id': str(table[1]), 'class': 'inSchema', 'attributes': {}})
+				tableGraph.add_node((str(table[1]) + '.' + str(table[0])), name=str(table[0]), rows=str(table[2]))
 
 
 
@@ -86,22 +89,23 @@ class Import_MySQL(_Import_Master):
 
 			# extract foreign key information to link the columns together
 			cur.execute(f"""
-			SELECT column_name, table_name, table_schema, referenced_column_name, referenced_table_name, referenced_table_schema
+			SELECT column_name, table_name, table_schema, referenced_column_name, referenced_table_name, referenced_table_schema, constraint_name
 			FROM information_schema.key_column_usage 
 			WHERE {system_tables_flag_constraints} referenced_table_schema IS NOT NULL;
 			""")
 			constraints_resultset = cur.fetchall()
 			for constraint in constraints_resultset:
-				node1_id = constraint[2] + '.' + constraint[1] + '.' + constraint[0]
-				node2_id = constraint[5] + '.' + constraint[4] + '.' + constraint[3]
+				node1_id = str(constraint[2]) + '.' + str(constraint[1]) + '.' + str(constraint[0])
+				node2_id = str(constraint[5]) + '.' + str(constraint[4]) + '.' + str(constraint[3])
 				edges.append({'node1_id': node1_id, 'node2_id': node2_id, 'class': 'References', 'attributes': {}})
+				tableGraph.add_edge(str(constraint[2]) + '.' + str(constraint[1]), str(constraint[5]) + '.' + str(constraint[4]), column_id=node1_id, referenced_column_id=node2_id, constraint_name=str(constraint[6]))
 
 			cur.close()
 
 		except Exception as err:
 			raise err
 		
-		return nodes, edges
+		return nodes, edges, tableGraph
 
 
 
@@ -166,7 +170,7 @@ class Export_Neo(object):
 				MATCH (b {'{'}id: '{node2_id}'{'}'})
 				MERGE (a)-[:{edgeClass} {'{'}"""
 		if len(edgeAttributesAsDict) > 0:
-			for key, val in edgeAttributesAsDict:
+			for key, val in edgeAttributesAsDict.items():
 				stmt = stmt + key + ': ' + "'" + val + "', "
 			stmt = stmt[:-2] 
 		stmt = stmt + '}]->(b);'
@@ -193,6 +197,23 @@ class Export_Neo(object):
 		with self._neo4j_driver.session() as session:
 			for edge in listOfEdges:
 				session.write_transaction(self._executeStmt, self._generateEdgeStmt(edge['node1_id'], edge['node2_id'], edge['class'], edge['attributes']))
+		return
+
+	def createTableNodes(self, tupleOfNodes):
+		with self._neo4j_driver.session() as session:
+			for node in tupleOfNodes:
+				session.write_transaction(self._executeStmt, self._generateCreateStmt(node_id=node[0], node_name=node[1]['name'], node_class='Table', nodeAttributesAsDict=node[1]))
+		return
+
+	def createTableEdges(self, tupleOfEdges):
+		with self._neo4j_driver.session() as session:
+			for edge in tupleOfEdges:
+				session.write_transaction(self._executeStmt, self._generateEdgeStmt(node1_id=edge[0], node2_id=edge[1], edgeClass='References', edgeAttributesAsDict=edge[2]))
+
+
+
+
+
 
 
 
