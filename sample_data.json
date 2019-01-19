@@ -1,0 +1,59 @@
+{
+	"": "Example of the data structure used for storing the RDBMS metadata.  JSON style (using python dicts and lists) allows flexibility in the information imported - certainly at the 'attribute' level."
+}
+
+
+{"nodes": [
+	{
+		"id": "sch.tab1",
+		"name": "tab1",
+		"class": "Table",
+		"attributes": {
+			"rows": "4353453",
+			"lastUpdated": "18-10-1990"
+		}
+	},
+	
+	{
+		"id": "sch.tab2",
+		"name": "tab2",
+		"class": "Table",
+		"attributes": {
+			"rows": "100",
+			"lastUpdated": "11-09-2001"
+		}
+	},
+
+	{
+		"id": "sch.tab2.col4",
+		"name": "col4",
+		"class": "Column",
+		"attributes": {
+			"is_primary": "YES",
+			"is_indexed": "YES",
+			"is_nullable": "NO"
+		}
+	}
+]}
+
+
+
+
+
+
+{"edges": [
+	{
+		"node1_id": "sch.tab1",
+		"node2_id": "sch.tab2",
+		"class": "References",
+		"attributes": {
+
+		}
+	}
+]}
+
+
+
+
+
+
