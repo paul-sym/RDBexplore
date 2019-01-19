@@ -1,2 +1,2 @@
-from RDBexplore.RDB_Graph import RDB_Graph
-from RDBexplore import connect_utils
+from rdbexplore.RDB_Graph import RDB_Graph
+from rdbexplore import connect_utils

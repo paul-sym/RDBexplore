@@ -1,4 +1,4 @@
-from RDBexplore import connect_utils
+from rdbexplore import connect_utils
 
 class RDB_Graph(object):
 
