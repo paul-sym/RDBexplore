@@ -10,8 +10,12 @@ import networkx as nx
 
 class _Import_Master(object):
 	def __init__(self, database_connection, include_system_tables, specific_schema=None):
+		if include_system_tables == True or include_system_tables == False:
+			self._include_system_tables = include_system_tables
+		else: 
+			raise Exception("The 'include_system_tables' value must be boolean.")
+			return
 		self.database_connection = database_connection
-		self._include_system_tables=include_system_tables
 		self._specificSchema = specific_schema
 		return
 
@@ -21,15 +25,14 @@ class _Import_Master(object):
 
 	@include_system_tables.setter
 	def include_system_tables(self, value):
-		# add validation logic here to block non-boolean values from being passed
-		self._include_system_tables = value
+		if value == True or value == False: self._include_system_tables = value
+		else: raise Exception("The 'include_system_tables' value must be boolean.")
 		return
 
 
 
 
 	def getData(self):
-
 		nodes = []
 		edges = []
 		tableGraph = nx.DiGraph()
@@ -38,14 +41,14 @@ class _Import_Master(object):
 			cur = self.database_connection.cursor()
 
 			# extract top-level schema information into nodes
-			cur.execute(f"{self.schema_query} {self.system_tables_flag_schema};")
+			cur.execute(self.schema_query)
 			schema_resultset = cur.fetchall()
 			for schema in schema_resultset:
 				nodes.append({'id': str(schema[0]), 'name': str(schema[0]), 'class': 'Schema', 'attributes': {}})
 
 
 			# extract table-level info into nodes (and the table->schema edges)
-			cur.execute(f"{self.table_query} {self.system_tables_flag_tables};")
+			cur.execute(self.table_query)
 			table_resultset = cur.fetchall()
 			for table in table_resultset:
 				nodes.append({'id': str(table[1]) + '.' + str(table[0]), 'name': str(table[0]), 'class': 'Table', 'attributes': {'parent_schema': str(table[1]), 'rows': str(table[2]), 'format': str(table[3]), 'created': str(table[4]), 'last_updated': str(table[5]), 'engine': str(table[6])}})
@@ -55,7 +58,7 @@ class _Import_Master(object):
 
 
 			# extract column-level info into nodes (and the column->table edges)
-			cur.execute(f"{self.column_query} {self.system_tables_flag_columns};")
+			cur.execute(self.column_query)
 			column_resultset = cur.fetchall()
 			for column in column_resultset:
 				nodes.append({'id': str(column[2]) + '.' + str(column[1]) + '.' + str(column[0]), 'name': str(column[0]), 'class': 'Column', 'attributes': {'parent_schema': str(column[2]), 'parent_table': str(column[1]), 'is_nullable': str(column[3]), 'is_primary': str(column[4]=='PRI'), 'is_unique': str(column[4]=='UNI' or column[4]=='PRI')}})
@@ -63,7 +66,7 @@ class _Import_Master(object):
 
 
 			# extract foreign key information to link the columns together
-			cur.execute(f"{self.constraint_query} {self.system_tables_flag_constraints};")
+			cur.execute(self.constraint_query)
 			constraints_resultset = cur.fetchall()
 			for constraint in constraints_resultset:
 				node1_id = str(constraint[2]) + '.' + str(constraint[1]) + '.' + str(constraint[0])
@@ -84,43 +87,119 @@ class _Import_Master(object):
 
 
 class Import_MySQL(_Import_Master):
-	
-
 	def getData(self):
 		"""
-		This method sets the strings used to construct the SQL queries that is appropriate for the specifc database implementation.
+		This method sets the strings used to construct the SQL queries that is appropriate for the MySQL database implementation.
 		It then call the the super() method of the generic class to actually execute the query and handle the response from the RDBMS.
 		"""
 
-		# set the query statements up to be in the MySQL style.
-		self.schema_query = "SELECT schema_name FROM information_schema.schemata"
-		self.table_query = "SELECT table_name, table_schema, table_rows, row_format, create_time, update_time, engine FROM information_schema.tables"
-		self.column_query = "SELECT column_name, table_name, table_schema, is_nullable, column_key FROM information_schema.columns"
-		self.constraint_query = "SELECT column_name, table_name, table_schema, referenced_column_name, referenced_table_name, referenced_table_schema, constraint_name FROM information_schema.key_column_usage WHERE referenced_table_schema IS NOT NULL"
-
-
-		# if-else for including additional constraints on each SQL query if we do not want information about the MySQL system tables returned or just want 1 schema
+		# if-else for including additional constraints on each SQL query if we do not want information about the MySQL system tables returned or just want one schema
 		if self._specificSchema is not None:
-			self.system_tables_flag_schema = f"WHERE schema_name = '{self._specificSchema}'"
-			self.system_tables_flag_tables = f"WHERE table_schema = '{self._specificSchema}'"
-			self.system_tables_flag_columns = f"WHERE table_schema = '{self._specificSchema}'"
-			self.system_tables_flag_constraints = f"AND constraint_schema = '{self._specificSchema}'"
+			system_tables_flag_schema = f"WHERE schema_name = '{self._specificSchema}'"
+			system_tables_flag_tables = f"WHERE table_schema = '{self._specificSchema}'"
+			system_tables_flag_columns = f"WHERE table_schema = '{self._specificSchema}'"
+			system_tables_flag_constraints = f"AND constraint_schema = '{self._specificSchema}'"
 		elif self._include_system_tables == True:
-			self.system_tables_flag_schema = '';
-			self.system_tables_flag_tables = '';
-			self.system_tables_flag_columns = '';
-			self.system_tables_flag_constraints = '';
+			system_tables_flag_schema = '';
+			system_tables_flag_tables = '';
+			system_tables_flag_columns = '';
+			system_tables_flag_constraints = '';
 		elif self._include_system_tables == False:
-			self.system_tables_flag_schema = "WHERE schema_name NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
-			self.system_tables_flag_tables = "WHERE table_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
-			self.system_tables_flag_columns = "WHERE table_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
-			self.system_tables_flag_constraints = "AND constraint_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
+			system_tables_flag_schema = "WHERE schema_name NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
+			system_tables_flag_tables = "WHERE table_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
+			system_tables_flag_columns = "WHERE table_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
+			system_tables_flag_constraints = "AND constraint_schema NOT IN ('sys', 'information_schema', 'performance_schema', 'mysql')"
 		else:
 			raise Exception('Invalid parameter passed for "include_system_tables".  Value passed must be boolean.')
 
 
+		# set the query statements up to be in the MySQL style.
+		self.schema_query = f"SELECT schema_name FROM information_schema.schemata {system_tables_flag_schema};"
+		self.table_query = f"SELECT table_name, table_schema, table_rows, row_format, create_time, update_time, engine FROM information_schema.tables  {system_tables_flag_tables};"
+		self.column_query = f"SELECT column_name, table_name, table_schema, is_nullable, column_key FROM information_schema.columns  {system_tables_flag_columns};"
+		self.constraint_query = f"SELECT column_name, table_name, table_schema, referenced_column_name, referenced_table_name, referenced_table_schema, constraint_name FROM information_schema.key_column_usage WHERE referenced_table_schema IS NOT NULL {system_tables_flag_constraints};"
+
 		return super().getData()
 
+
+
+
+class Import_Oracle(_Import_Master):
+	def getData(self):
+		"""
+		This method sets the strings used to construct the SQL queries that is appropriate for the Oracle database implementation.
+		It then call the the super() method of the generic class to actually execute the query and handle the response from the RDBMS.
+		"""
+		if self._specificSchema is not None:
+			system_tables_flag_schema = f"WHERE owner = '{self._specificSchema}'"
+			system_tables_flag_tables = f"AND atab.owner = '{self._specificSchema}'"
+			system_tables_flag_columns = f"WHERE owner = '{self._specificSchema}'"
+			system_tables_flag_columns2 = f"AND ac.owner = '{self._specificSchema}'"
+			system_tables_flag_constraints = f"AND ac.owner = '{self._specificSchema}'"
+		elif self._include_system_tables == True:
+			system_tables_flag_schema = ''
+			system_tables_flag_tables = ''
+			system_tables_flag_columns = ''
+			system_tables_flag_columns2 = ''
+			system_tables_flag_constraints = ''
+		elif self._include_system_tables == False:
+			system_tables_flag_schema = f"WHERE owner NOT IN ('SYS', 'SYSTEM', 'INTERNAL', 'PUBLIC', 'PERFSTAT', 'OPS$ORACLE')"
+			system_tables_flag_tables = f"AND atab.owner NOT IN ('SYS', 'SYSTEM', 'INTERNAL', 'PUBLIC', 'PERFSTAT', 'OPS$ORACLE')"
+			system_tables_flag_columns = f"WHERE owner NOT IN ('SYS', 'SYSTEM', 'INTERNAL', 'PUBLIC', 'PERFSTAT', 'OPS$ORACLE')"
+			system_tables_flag_columns2 = f"AND ac.owner NOT IN ('SYS', 'SYSTEM', 'INTERNAL', 'PUBLIC', 'PERFSTAT', 'OPS$ORACLE')"
+			system_tables_flag_constraints = f"AND ac.owner NOT IN ('SYS', 'SYSTEM', 'INTERNAL', 'PUBLIC', 'PERFSTAT', 'OPS$ORACLE')"
+		else:
+			raise Exception('Invalid parameter passed for "include_system_tables".  Value passed must be boolean.')
+
+
+
+		self.schema_query = f"SELECT DISTINCT owner from all_tables {system_tables_flag_schema};"
+
+		self.table_query = f"""SELECT MAX(tbn), MAX(owne), MAX(rowss), MAX(row_format), MAX(cre), MAX(atm.timestamp), pth
+		FROM
+			(SELECT CONCAT(CONCAT(atab.owner, '.'), atab.table_name) AS pth, atab.table_name AS tbn, atab.owner AS owne, atab.num_rows AS rowss, 'ORACLE' as row_format, aobj.created as cre
+    		FROM all_tables atab
+    		JOIN all_objects aobj ON aobj.object_name = atab.table_name
+ 			WHERE aobj.object_type = 'TABLE'
+    		{system_tables_flag_tables}
+    		) tabs
+    	LEFT JOIN all_tab_modifications atm ON tabs.tbn = atm.table_name
+    	GROUP BY pth;"""
+
+		self.column_query = f"""SELECT atc.column_name, atc.table_name, atc.owner, atc.nullable, primaries.prim
+		FROM all_tab_columns atc
+		LEFT JOIN
+			(SELECT CONCAT(acc.owner,CONCAT('.', CONCAT(acc.table_name, CONCAT('.', acc.column_name)))) as pth, 'PRI' AS prim
+			FROM all_cons_columns acc, all_constraints ac
+			WHERE ac.CONSTRAINT_NAME = acc.CONSTRAINT_NAME
+			AND ac.owner = acc.owner
+			AND ac.constraint_type = 'P'
+			{system_tables_flag_columns2}
+    	) primaries ON CONCAT(atc.owner,CONCAT('.', CONCAT(atc.table_name, CONCAT('.', atc.column_name)))) = primaries.pth
+    	 {system_tables_flag_columns};"""
+
+		self.constraint_query = f"""
+			SELECT acc.COLUMN_NAME AS fromcolumn, acc.table_name AS fromtable, acc.OWNER AS fromowner, tocols.col AS tocolumn, tocols.tn AS totable, tocols.ow AS toowner
+			FROM (
+		        SELECT acc.owner AS ow, acc.TABLE_NAME AS tn, acc.COLUMN_NAME AS col, acc.CONSTRAINT_NAME AS cn
+		        FROM all_cons_columns acc
+		        JOIN all_constraints ac ON ac.constraint_name = acc.CONSTRAINT_NAME
+		        WHERE ac.CONSTRAINT_TYPE IN ('P', 'U')
+        		{system_tables_flag_constraints}
+    		) tocols
+    		JOIN all_constraints ac ON ac.R_CONSTRAINT_NAME = tocols.cn
+    		JOIN all_cons_columns acc ON ac.CONSTRAINT_NAME = acc.CONSTRAINT_NAME
+			WHERE ac.CONSTRAINT_TYPE IN ('R')
+			{system_tables_flag_constraints}
+			;"""
+
+
+		return super().getData() 	
+
+
+		
+
+		
 
 
 		

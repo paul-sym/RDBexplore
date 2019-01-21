@@ -55,14 +55,19 @@ class RDB_Graph(object):
 
 
 
-	def extractData(self, databaseConnection, include_system_tables=False, specific_schema=None):
+	def extractData(self, databaseConnection, connectionType, include_system_tables=False, specific_schema=None):
 		self.dropData()
 		self._system_tables_included = include_system_tables
-		# add some logic here to switch between connection types.  At moment will only accept MySQL connections.
-		# Also need some logic to handle unknown connections types. 
-		# For other database type introduction, use same instance name, but instantiate it from a different 'Import' class from connect_utils.
-		# if connection_type == 'mysql':
-		self._importer = connect_utils.Import_MySQL(databaseConnection, include_system_tables=self._system_tables_included, specific_schema=specific_schema)
+		
+		# block setting which database type to use (and therefore which class to use as '_importer')
+		if connectionType == 'mysql':
+			self._importer = connect_utils.Import_MySQL(databaseConnection, include_system_tables=self._system_tables_included, specific_schema=specific_schema)
+		elif connectionType == 'oracle':
+			self._importer = connect_utils.Import_Oracle(databaseConnection, include_system_tables=self._system_tables_included, specific_schema=specific_schema)
+		else:
+			raise Exception("Connection type not recognised.  Use one of the following types: 'mysql', 'oracle'.")
+
+
 
 		try:
 			self._nodes, self._edges, self._tableOnlyGraph = self._importer.getData()
@@ -71,10 +76,11 @@ class RDB_Graph(object):
 
 		except Exception as err:
 			print(f'Exception occurred in RDB_Graph.extractData() for connection {str(databaseConnection)}.  Data not extracted.')
+			print(err)
 			self._successfulDataImport = False
-			raise Exception(err)
-
 		return
+
+
 
 
 
@@ -102,8 +108,6 @@ class RDB_Graph(object):
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 			return
-
-
 
 
 	def findMostRootTables(self, numberToReturn=0):
@@ -152,6 +156,9 @@ class RDB_Graph(object):
 		return
 
 
+
+
+
 	def exportTableOnlyGraph(self, neo4j_graphDatabase_driver):
 		if self._successfulDataImport:
 			# more logic needed here to hanlde other types of graph DB connection request
@@ -163,8 +170,6 @@ class RDB_Graph(object):
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 		return
-
-
 
 
 	def exportGraph(self, neo4j_graphDatabase_driver):

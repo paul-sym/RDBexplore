@@ -26,9 +26,10 @@ The package constructs an internal graph from the RDBMS metadata, allowing the d
     
 
 
-Currently supported relational database distributions:
+Currently supported relational database implementations:
 
 - MySQL 8.x
+- Oracle
 
 
 Currently supported graph software distributions:
