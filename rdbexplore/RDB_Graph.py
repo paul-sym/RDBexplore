@@ -83,6 +83,25 @@ class RDB_Graph(object):
 
 
 
+	def extractDataCSV(self, schema_query_path, table_query_path, column_query_path, constraint_query_path):
+		self.dropData()
+		self._importer = connect_utils.Import_From_CSV(schema_query_path, table_query_path, column_query_path, constraint_query_path)
+
+		try:
+			self._nodes, self._edges, self._tableOnlyGraph = self._importer.getData()
+			self._successfulDataImport = True
+			print(f'Metadata extracted using CSV.')
+
+		except Exception as err:
+			print(f'Exception occurred in RDB_Graph.extractData() for csv file.  Data not extracted.')
+			print(err)
+			self._successfulDataImport = False
+		return
+
+
+
+
+
 
 
 	def generateShortestJoinPathSQL(self, table1_id, table2_id, where_restriction=''):

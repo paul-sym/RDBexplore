@@ -1,4 +1,6 @@
 import re
+import csv
+
 import networkx as nx
 
 # ------------------------------------------------------------------------------------------------------------------------
@@ -8,7 +10,89 @@ import networkx as nx
 # ------------------------------------------------------------------------------------------------------------------------
 
 
-class _Import_Master(object):
+class Import_From_CSV(object):
+	def __init__(self, schema_query_path, table_query_path, column_query_path, constraint_query_path):
+		self._schema_query_path = schema_query_path
+		self._table_query_path = table_query_path
+		self._column_query_path = column_query_path
+		self._constraint_query_path = constraint_query_path
+
+		return
+
+	
+
+	def getData(self, csv_delimiter=','):
+		print('Starting getData()')
+		nodes = []
+		edges = []
+		tableGraph = nx.DiGraph()
+
+
+		try:
+			with open(self._schema_query_path) as csv_file:
+				csv_reader = csv.reader(csv_file, delimiter=csv_delimiter)
+				row = 0 
+				for schema in csv_reader:
+					if row == 0:
+						row += 1
+					else:
+						nodes.append({'id': str(schema[0]), 'name': str(schema[0]), 'class': 'Schema', 'attributes': {}})
+			print('\tSchema import complete')
+					
+
+			with open(self._table_query_path) as csv_file:
+				csv_reader = csv.reader(csv_file, delimiter=csv_delimiter)
+				row = 0 
+				for table in csv_reader:
+					if row == 0:
+						row = 1
+					else:
+						nodes.append({'id': str(table[1]) + '.' + str(table[0]), 'name': str(table[0]), 'class': 'Table', 'attributes': {'parent_schema': str(table[1]), 'rows': str(table[2]), 'format': str(table[3]), 'created': str(table[4]), 'last_updated': str(table[5]), 'engine': str(table[6])}})
+						edges.append({'node1_id': str(table[1]) + '.' + str(table[0]), 'node2_id': str(table[1]), 'class': 'inSchema', 'attributes': {}})
+						tableGraph.add_node((str(table[1]) + '.' + str(table[0])), name=str(table[0]), rows=str(table[2]))
+			print('\tTable import complete')
+
+			with open(self._column_query_path) as csv_file:
+				csv_reader = csv.reader(csv_file, delimiter=csv_delimiter)
+				row = 0 
+				for column in csv_reader:
+					if row == 0:
+						row = 1
+					else:
+						nodes.append({'id': str(column[2]) + '.' + str(column[1]) + '.' + str(column[0]), 'name': str(column[0]), 'class': 'Column', 'attributes': {'parent_schema': str(column[2]), 'parent_table': str(column[1]), 'is_nullable': str(column[3]), 'is_primary': str(column[4]=='PRI'), 'is_unique': str(column[4]=='UNI' or column[4]=='PRI')}})
+						edges.append({'node1_id': str(column[2]) + '.' + str(column[1]) + '.' + str(column[0]), 'node2_id': str(column[2]) + '.' + str(column[1]), 'class': 'inTable', 'attributes':{}})
+			print('\tColumn import complete')
+
+			with open(self._constraint_query_path) as csv_file:
+				csv_reader = csv.reader(csv_file, delimiter=csv_delimiter)
+				row = 0 
+				for constraint in csv_reader:
+					if row == 0:
+						row += 1
+					else:
+						node1_id = str(constraint[2]) + '.' + str(constraint[1]) + '.' + str(constraint[0])
+						node2_id = str(constraint[5]) + '.' + str(constraint[4]) + '.' + str(constraint[3])
+						edges.append({'node1_id': node1_id, 'node2_id': node2_id, 'class': 'References', 'attributes': {}})
+						tableGraph.add_edge(str(constraint[2]) + '.' + str(constraint[1]), str(constraint[5]) + '.' + str(constraint[4]), column_id=node1_id, referenced_column_id=node2_id)
+			print('\tConstraint import complete')
+
+
+
+
+
+		except Exception as err:
+			print('Error occurred in Import_From_CSV:')
+			print(err)
+			return
+
+		return nodes, edges, tableGraph
+
+
+
+
+
+
+class _Import_Master_SQL(object):
 	def __init__(self, database_connection, include_system_tables, specific_schema=None):
 		if include_system_tables == True or include_system_tables == False:
 			self._include_system_tables = include_system_tables
@@ -86,7 +170,7 @@ class _Import_Master(object):
 
 
 
-class Import_MySQL(_Import_Master):
+class Import_MySQL(_Import_Master_SQL):
 	def getData(self):
 		"""
 		This method sets the strings used to construct the SQL queries that is appropriate for the MySQL database implementation.
@@ -124,7 +208,7 @@ class Import_MySQL(_Import_Master):
 
 
 
-class Import_Oracle(_Import_Master):
+class Import_Oracle(_Import_Master_SQL):
 	def getData(self):
 		"""
 		This method sets the strings used to construct the SQL queries that is appropriate for the Oracle database implementation.
