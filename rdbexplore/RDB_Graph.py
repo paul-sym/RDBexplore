@@ -1,6 +1,8 @@
+import itertools
+
 from rdbexplore import connect_utils
 import networkx as nx
-import itertools
+
 
 class RDB_Graph(object):
 
@@ -35,6 +37,7 @@ class RDB_Graph(object):
 
 	def __init__(self):
 		self._successfulDataImport = False
+		self._successfulTableDataImport = False
 		self._nodes = []
 		self._edges = []
 		self._importer = None
@@ -44,6 +47,7 @@ class RDB_Graph(object):
 
 	def dropData(self):
 		self._successfulDataImport = False
+		self._successfulTableDataImport = False
 		self._nodes = []
 		self._edges = []
 		self._importer = None
@@ -72,12 +76,12 @@ class RDB_Graph(object):
 		try:
 			self._nodes, self._edges, self._tableOnlyGraph = self._importer.getData()
 			self._successfulDataImport = True
+			self._successfulTableDataImport = True
 			print(f'Relational database metadata extracted using connection {str(databaseConnection)}')
 
 		except Exception as err:
 			print(f'Exception occurred in RDB_Graph.extractData() for connection {str(databaseConnection)}.  Data not extracted.')
 			print(err)
-			self._successfulDataImport = False
 		return
 
 
@@ -90,12 +94,12 @@ class RDB_Graph(object):
 		try:
 			self._nodes, self._edges, self._tableOnlyGraph = self._importer.getData()
 			self._successfulDataImport = True
+			self._successfulTableDataImport = True
 			print(f'Metadata extracted using CSV.')
 
 		except Exception as err:
 			print(f'Exception occurred in RDB_Graph.extractData() for csv file.  Data not extracted.')
 			print(err)
-			self._successfulDataImport = False
 		return
 
 
@@ -104,26 +108,37 @@ class RDB_Graph(object):
 
 
 
-	def generateShortestJoinPathSQL(self, table1_id, table2_id, where_restriction=''):
+	def generateShortestJoinPath(self, table1_id, table2_id, printPath=True, returnAsSQL=False, where_restriction=''):
 		"""
 		This method calculates the shortest path between two tables and constructs a working join statement for these.  
 		Note: the statement presented does not account for any databse factors (e.g. indexing, row length etc in its calculation).
 		"""
-		if self._successfulDataImport:
+		if self._successfulTableDataImport:
 			tableOnlyGraphUndirected = self._tableOnlyGraph.to_undirected() # converts to an undirected graph (as joins can be done regardless of reference direction)
 			shortestPathNodes = nx.algorithms.shortest_paths.generic.shortest_path(tableOnlyGraphUndirected, source=table1_id, target=table2_id)
 
+			if printPath:
+				for i in range(0,len(shortestPathNodes)-1):
+					print(shortestPathNodes[i])
+					print('\t\t|')
+					print('\t\tv')
+				print(shortestPathNodes[-1])
+
 			# use data to create a join statement
-			sql_join_output = f"SELECT {shortestPathNodes[0]}.*, {shortestPathNodes[-1]}.*  \n\nFROM {shortestPathNodes[0]}"
-			for i in range(1, len(shortestPathNodes)):
-				fromColumn = tableOnlyGraphUndirected.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['column_id']
-				toColumn = tableOnlyGraphUndirected.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['referenced_column_id']
-				sql_join_output = sql_join_output + f" \nJOIN {shortestPathNodes[i]} ON {fromColumn} = {toColumn}"
+			if returnAsSQL:
+				sql_join_output = f"SELECT {shortestPathNodes[0]}.*, {shortestPathNodes[-1]}.*  \n\nFROM {shortestPathNodes[0]}"
+				for i in range(1, len(shortestPathNodes)):
+					fromColumn = tableOnlyGraphUndirected.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['column_id']
+					toColumn = tableOnlyGraphUndirected.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['referenced_column_id']
+					sql_join_output = sql_join_output + f" \nJOIN {shortestPathNodes[i]} ON {fromColumn} = {toColumn}"
 
-			where_restriction = '\n' + str(where_restriction)
-			sql_join_output = sql_join_output + f'{where_restriction};'
+				where_restriction = '\n' + str(where_restriction)
+				sql_join_output = sql_join_output + f'{where_restriction};'
 
-			return sql_join_output
+				return shortestPathNodes, sql_join_output
+
+			return shortestPathNodes
+			
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 			return
@@ -132,7 +147,7 @@ class RDB_Graph(object):
 	def findMostRootTables(self, numberToReturn=0):
 
 
-		if self._successfulDataImport:
+		if self._successfulTableDataImport:
 			
 			# loop through each of the table nodes, finding the in and out degrees (and taking the ratio too)
 			degrees = []
@@ -157,7 +172,7 @@ class RDB_Graph(object):
 
 
 	def findTableCommunities(self, maxNumberOfCommunities):
-		if self._successfulDataImport:
+		if self._successfulTableDataImport:
 			comm_list = []
 			comp = nx.algorithms.community.centrality.girvan_newman(self._tableOnlyGraph.to_undirected())
 			limited = itertools.takewhile(lambda c: len(c) <= maxNumberOfCommunities, comp)
@@ -179,7 +194,7 @@ class RDB_Graph(object):
 
 
 	def exportTableOnlyGraph(self, neo4j_graphDatabase_driver):
-		if self._successfulDataImport:
+		if self._successfulTableDataImport:
 			# more logic needed here to hanlde other types of graph DB connection request
 			self._exporter = connect_utils.Export_Neo(neo4j_graphDatabase_driver)
 			self._exporter.dropAll()
@@ -202,6 +217,20 @@ class RDB_Graph(object):
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 		return
+
+
+	def saveGraph(self, filePathToSaveTo):
+		nx.readwrite.graphml.write_graphml(self._tableOnlyGraph, filePathToSaveTo)
+		print('Exported in GraphML format.')
+		return
+
+	def loadGraph(self, filePathToLoadFrom, node_type=str, edge_key_type=str):
+		self._tableOnlyGraph = nx.readwrite.graphml.read_graphml(filePathToLoadFrom)
+		self._successfulDataImport = False
+		self._successfulTableDataImport = True
+		print('Database metadata imported.')
+		return
+
 
 
 
