@@ -105,7 +105,48 @@ class RDB_Graph(object):
 
 
 
+	def generateShortestJoinPathOneWay(self, table1_id, table2_id, printPath=True, returnAsSQL=False):
+		if self._successfulTableDataImport:
+			try:
+				shortestPathNodesForward = nx.algorithms.shortest_paths.generic.shortest_path(self._tableOnlyGraph, source=table1_id, target=table2_id)
+			except: 
+				shortestPathNodesForward = []
+			try:
+				shortestPathNodesReverse = nx.algorithms.shortest_paths.generic.shortest_path(self._tableOnlyGraph, target=table1_id, source=table2_id)
+			except:
+				shortestPathNodesReverse = []
+			
+			if len(shortestPathNodesForward) <= len(shortestPathNodesReverse) and len(shortestPathNodesForward) > 0: shortestPathNodes = shortestPathNodesForward
+			elif len(shortestPathNodesForward) > len(shortestPathNodesReverse) and len(shortestPathNodesReverse) > 0: shortestPathNodes = shortestPathNodesReverse
+			else: return []
 
+			if printPath:
+				for i in range(0,len(shortestPathNodes)-1):
+					print(shortestPathNodes[i])
+					print('\t\t|')
+					print('\t\tv')
+				print(shortestPathNodes[-1])
+
+			# use data to create a join statement
+			if returnAsSQL:
+				sql_join_output = f"SELECT {shortestPathNodes[0]}.*, {shortestPathNodes[-1]}.*  \n\nFROM {shortestPathNodes[0]}"
+				for i in range(1, len(shortestPathNodes)):
+					fromColumn = self._tableOnlyGraph.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['column_id']
+					toColumn = self._tableOnlyGraph.get_edge_data(shortestPathNodes[i-1], shortestPathNodes[i])['referenced_column_id']
+					sql_join_output = sql_join_output + f" \nJOIN {shortestPathNodes[i]} ON {fromColumn} = {toColumn}"
+
+				where_restriction = '\n' + str(where_restriction)
+				sql_join_output = sql_join_output + f'{where_restriction};'
+
+				return shortestPathNodes, sql_join_output
+
+			return shortestPathNodes
+
+
+
+		else:
+			print('No data imported.  Use "getData" function to import data.')
+		return
 
 
 	def generateShortestJoinPath(self, table1_id, table2_id, printPath=True, returnAsSQL=False, where_restriction=''):
@@ -115,7 +156,11 @@ class RDB_Graph(object):
 		"""
 		if self._successfulTableDataImport:
 			tableOnlyGraphUndirected = self._tableOnlyGraph.to_undirected() # converts to an undirected graph (as joins can be done regardless of reference direction)
-			shortestPathNodes = nx.algorithms.shortest_paths.generic.shortest_path(tableOnlyGraphUndirected, source=table1_id, target=table2_id)
+			try:
+				shortestPathNodes = nx.algorithms.shortest_paths.generic.shortest_path(tableOnlyGraphUndirected, source=table1_id, target=table2_id)
+			except:
+				shortestPathNodes = []
+				return shortestPathNodes
 
 			if printPath:
 				for i in range(0,len(shortestPathNodes)-1):
