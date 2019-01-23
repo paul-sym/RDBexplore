@@ -138,7 +138,7 @@ class RDB_Graph(object):
 				return shortestPathNodes, sql_join_output
 
 			return shortestPathNodes
-			
+
 		else:
 			raise Exception('No data imported.  Use "getData" function to import data.')
 			return
@@ -220,9 +220,13 @@ class RDB_Graph(object):
 
 
 	def saveGraph(self, filePathToSaveTo):
-		nx.readwrite.graphml.write_graphml(self._tableOnlyGraph, filePathToSaveTo)
-		print('Exported in GraphML format.')
+		if self._successfulTableDataImport:
+			nx.readwrite.graphml.write_graphml(self._tableOnlyGraph, filePathToSaveTo)
+			print('Exported in GraphML format.')
+		else:
+			print('No data imported.  Use "getData" function to import data.')
 		return
+
 
 	def loadGraph(self, filePathToLoadFrom, node_type=str, edge_key_type=str):
 		self._tableOnlyGraph = nx.readwrite.graphml.read_graphml(filePathToLoadFrom)
@@ -230,6 +234,21 @@ class RDB_Graph(object):
 		self._successfulTableDataImport = True
 		print('Database metadata imported.')
 		return
+
+
+	def findNeighbours(self, node, printOutput=False):
+		if self._successfulTableDataImport:
+			neighbours = []
+			for key, val in self._tableOnlyGraph[node].items():
+				neighbours.append(key)
+				if printOutput: print (key)
+			return neighbours
+
+		else:
+			print('No data imported.  Use "getData" function to import data.')
+			return
+		
+
 
 
 
