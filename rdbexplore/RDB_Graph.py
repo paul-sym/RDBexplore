@@ -105,20 +105,28 @@ class RDB_Graph(object):
 
 
 
-	def generateShortestJoinPathOneWay(self, table1_id, table2_id, printPath=True, returnAsSQL=False):
+	def generateShortestJoinPathOneWay(self, table1_id, table2_id, printPath=True, returnAsSQL=False, where_restriction=''):
 		if self._successfulTableDataImport:
 			try:
 				shortestPathNodesForward = nx.algorithms.shortest_paths.generic.shortest_path(self._tableOnlyGraph, source=table1_id, target=table2_id)
 			except: 
 				shortestPathNodesForward = []
+
 			try:
 				shortestPathNodesReverse = nx.algorithms.shortest_paths.generic.shortest_path(self._tableOnlyGraph, target=table1_id, source=table2_id)
 			except:
 				shortestPathNodesReverse = []
 			
-			if len(shortestPathNodesForward) <= len(shortestPathNodesReverse) and len(shortestPathNodesForward) > 0: shortestPathNodes = shortestPathNodesForward
-			elif len(shortestPathNodesForward) > len(shortestPathNodesReverse) and len(shortestPathNodesReverse) > 0: shortestPathNodes = shortestPathNodesReverse
-			else: return []
+			# conditional block to return the best result
+			if len(shortestPathNodesForward) == 0 and len(shortestPathNodesReverse) == 0:
+				return []
+			elif len(shortestPathNodesForward) == 0:
+				shortestPathNodes = shortestPathNodesReverse
+			elif len(shortestPathNodesReverse) == 0:
+				shortestPathNodes = shortestPathNodesForward
+			else:
+				if shortestPathNodesForward <= shortestPathNodesReverse: shortestPathNodes = shortestPathNodesForward
+				else: shortestPathNodes = shortestPathNodesReverse
 
 			if printPath:
 				for i in range(0,len(shortestPathNodes)-1):
