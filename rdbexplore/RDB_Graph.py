@@ -291,15 +291,20 @@ class RDB_Graph(object):
 
 	def findNeighbours(self, node, printOutput=False):
 		if self._successfulTableDataImport:
+			if printOutput:
+				print('Neighbours:')
 			neighbours = []
-			for key, val in self._tableOnlyGraph[node].items():
+			for key, val in self._tableOnlyGraph.to_undirected()[node].items():
 				neighbours.append(key)
-				if printOutput: print (key)
+				if printOutput: 
+					print (key)
+			if printOutput:
+				print('[End neighbours]')
 			return neighbours
 
 		else:
 			print('No data imported.  Use "getData" function to import data.')
-			return
+			return None
 		
 
 
